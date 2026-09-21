@@ -31,7 +31,6 @@ if "rendimentos" not in st.session_state: st.session_state["rendimentos"] = 0.0
 if "impostos" not in st.session_state: st.session_state["impostos"] = 0.0
 if "outras_provisoes" not in st.session_state: st.session_state["outras_provisoes"] = 0.0
 
-# Funções auxiliares para tratamento de texto e conversão de valores R$
 def converter_para_float(texto_valor):
     try:
         limpo = texto_valor.replace(".", "").replace(",", ".")
@@ -57,7 +56,6 @@ with tab1:
     st.subheader(f"📌 {st.session_state['contrato_nome']}")
     st.caption(f"Município: {st.session_state['municipio']} | Repasse Mensal Previsto: R$ {st.session_state['repasse_mensal']:,.2f}")
     
-    # Barra Lateral para Ajuste Manual Se Necessário
     st.sidebar.header("⚙️ Ajuste Manual de Saldos")
     st.session_state["saldo_banco"] = st.sidebar.number_input("Saldo Bruto no Banco (R$)", value=st.session_state["saldo_banco"], step=500.0)
     st.session_state["prov_rescisao"] = st.sidebar.number_input("Provisões Trabalhistas/Rescisões (R$)", value=st.session_state["prov_rescisao"], step=500.0)
@@ -65,45 +63,43 @@ with tab1:
     st.session_state["impostos"] = st.sidebar.number_input("Impostos/Retenções (R$)", value=st.session_state["impostos"], step=100.0)
     st.session_state["outras_provisoes"] = st.sidebar.number_input("Outras Reservas (R$)", value=st.session_state["outras_provisoes"], step=100.0)
     
-    # CÁLCULOS
     total_bloqueado = st.session_state["prov_rescisao"] + st.session_state["rendimentos"] + st.session_state["impostos"] + st.session_state["outras_provisoes"]
     saldo_livre = st.session_state["saldo_banco"] - total_bloqueado
     meses_cobertura = saldo_livre / st.session_state["repasse_mensal"] if st.session_state["repasse_mensal"] > 0 else 0.0
 
-    # CARDS DE RESPOSTA RÁPIDA
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.markdown(f"""
+        st.markdown(f'
 
 Saldo Total no Banco
 
-R$ {st.session_state['saldo_banco']:,.2f}
+R$ {st.session_state["saldo_banco"]:,.2f}
 
-""", unsafe_allow_html=True)
+', unsafe_allow_html=True)
 
 with col2:
-st.markdown(f"""
+    st.markdown(f'
 
 Reservas Bloqueadas
 
 R$ {total_bloqueado:,.2f}
 
-""", unsafe_allow_html=True)
+', unsafe_allow_html=True)
 
 with col3:
-st.markdown(f"""
+    st.markdown(f'
 
 Saldo Real Livre
 
 R$ {saldo_livre:,.2f}
 
-""", unsafe_allow_html=True)
+', unsafe_allow_html=True)
 
 st.markdown("
 
+
 ", unsafe_allow_html=True)
 
-# RESUMO EXECUTIVO
 st.info(f"""
 💡 **Síntese para a Diretoria:**
 * **Entradas no Mês:** R$ {st.session_state['total_entradas']:,.2f} | **Saídas no Mês:** R$ {st.session_state['total_saidas']:,.2f}
@@ -112,7 +108,6 @@ st.info(f"""
 * **Saldo Operacional Efetivamente Livre:** **R$ {saldo_livre:,.2f}** *(Cobre {meses_cobertura:.2f} meses de custeio)*
 """)
 
-# GRÁFICO
 if st.session_state["saldo_banco"] > 0:
     st.subheader("🧩 Divisão do Saldo")
     df_pie = pd.DataFrame({
@@ -138,20 +133,18 @@ if arquivo_contrato is not None:
     for page in reader.pages:
         texto_completo += page.extract_text() or ""
     
-    # BUSCA AUTOMÁTICA POR PADRÕES DE TEXTO (REGEX)
     num_contrato_match = re.search(r"(CONTRATO DE PROGRAMA\s*(?:Nº|Nº\.|NO)?\s*\d+/\d+)", texto_completo, re.IGNORECASE)
     municipio_match = re.search(r"MUNICÍPIO DE\s+([A-ZÁÉÍÓÚÂÊÔÃÕÇ\s]{3,30})", texto_completo)
     valores_match = re.findall(r"R\$\s*([\d\.,]+)", texto_completo)
     
     st.success("✅ Arquivo processado com sucesso! Confira os dados extraídos abaixo:")
     
-    # EXIBIÇÃO PARA O USUÁRIO CONFIRMAR OU AJUSTAR
     c1, c2 = st.columns(2)
     with c1:
         nome_ext = st.text_input("Número/Identificação do Contrato", value=num_contrato_match.group(1) if num_contrato_match else "Contrato Identificado")
         muni_ext = st.text_input("Município Contratante", value=municipio_match.group(1).strip() if municipio_match else "Álvares Machado")
     with c2:
-        v_global = st.number_input("Valor Global Extracted (R$)", value=converter_para_float(valores_match[0]) if len(valores_match) > 0 else 0.0)
+        v_global = st.number_input("Valor Global Extraído (R$)", value=converter_para_float(valores_match[0]) if len(valores_match) > 0 else 0.0)
         v_mensal = st.number_input("Parcela Mensal Prevista (R$)", value=converter_para_float(valores_match[1]) if len(valores_match) > 1 else 0.0)
         
     if st.button("💾 Gravar Dados do Contrato no Sistema"):
@@ -177,13 +170,11 @@ if arquivo_extrato is not None:
     for page in reader_ex.pages:
         texto_extrato += page.extract_text() or ""
     
-    # BUSCA AUTOMÁTICA POR PADRÕES COMUNS DE EXTRATOS BANCÁRIOS
     saldos_encontrados = re.findall(r"SALDO\s*(?:FINAL|DISPONÍVEL|ATUAL)?\s*:?\s*R\$\s*([\d\.,]+)", texto_extrato, re.IGNORECASE)
     rendimentos_encontrados = re.findall(r"(?:RENDIMENTO|RESGATE AUTOMATICO|APLICACAO)\s*:?\s*R\$\s*([\d\.,]+)", texto_extrato, re.IGNORECASE)
     
     st.success("✅ Extrato bancário analisado!")
     
-    # PREENCHIMENTO DOS CAMPOS DE ENTRADAS/SAÍDAS E SALDO
     col_ex1, col_ex2 = st.columns(2)
     with col_ex1:
         saldo_ext = st.number_input("Saldo Final do Banco (R$)", value=converter_para_float(saldos_encontrados[0]) if saldos_encontrados else st.session_state["saldo_banco"])
