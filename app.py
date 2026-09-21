@@ -1,86 +1,76 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from pypdf import PdfReader
+import re
 
-# Configuração da página no navegador
-st.set_page_config(page_title="Gestão de Saldos - CIOP", layout="wide")
+# ------------------------------------------------------------------------------
+# CONFIGURAÇÃO DA PÁGINA
+# ------------------------------------------------------------------------------
+st.set_page_config(page_title="Gestão de Saldos - CIOP", layout="wide", page_icon="🏥")
 
-# Estilização básica dos cartões de saldo
+# Estilização CSS personalizada
 st.markdown("""
-<style>
-    .card-total { background-color: #e9ecef; padding: 15px; border-radius: 8px; border-left: 5px solid #6c757d; }
-    .card-bloqueado { background-color: #ffe3e3; padding: 15px; border-radius: 8px; border-left: 5px solid #dc3545; }
-    .card-livre { background-color: #d3f9d8; padding: 15px; border-radius: 8px; border-left: 5px solid #28a745; }
-    .card-title { font-size: 0.85rem; font-weight: bold; color: #495057; text-transform: uppercase; }
-    .card-value { font-size: 1.8rem; font-weight: bold; color: #212529; }
-</style>
+
 """, unsafe_allow_html=True)
 
-st.title("📊 Sistema de Análise de Saldos Contratuais")
-st.caption("Visão em tempo real do Saldo Bancário x Saldo Operacional Livre")
+# ------------------------------------------------------------------------------
+# INICIALIZAÇÃO DA MEMÓRIA DO SISTEMA (SISTEMA ZERADO)
+# ------------------------------------------------------------------------------
+if "contrato_nome" not in st.session_state: st.session_state["contrato_nome"] = "Nenhum contrato carregado"
+if "municipio" not in st.session_state: st.session_state["municipio"] = "Não informado"
+if "valor_global" not in st.session_state: st.session_state["valor_global"] = 0.0
+if "repasse_mensal" not in st.session_state: st.session_state["repasse_mensal"] = 0.0
 
-# BARRA LATERAL: ENTRADA DE DADOS
-st.sidebar.header("⚙️ Painel de Controle (Simulador)")
-contrato_nome = st.sidebar.text_input("Nome do Contrato", "Contrato 31/2025 - Álvares Machado")
-repasse_mensal = st.sidebar.number_input("Valor do Repasse Mensal (R$)", value=401261.12, step=1000.0)
+if "saldo_banco" not in st.session_state: st.session_state["saldo_banco"] = 0.0
+if "total_entradas" not in st.session_state: st.session_state["total_entradas"] = 0.0
+if "total_saidas" not in st.session_state: st.session_state["total_saidas"] = 0.0
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("📥 Lançamento de Saldo e Reservas")
-saldo_banco = st.sidebar.number_input("Saldo Bruto do Extrato (R$)", value=450000.00, step=1000.0)
+if "prov_rescisao" not in st.session_state: st.session_state["prov_rescisao"] = 0.0
+if "rendimentos" not in st.session_state: st.session_state["rendimentos"] = 0.0
+if "impostos" not in st.session_state: st.session_state["impostos"] = 0.0
+if "outras_provisoes" not in st.session_state: st.session_state["outras_provisoes"] = 0.0
 
-prov_rescisao = st.sidebar.number_input("Provisões Trabalhistas / Rescisões (R$)", value=70000.00, step=500.0)
-rendimentos = st.sidebar.number_input("Rendimentos de Aplicação (R$)", value=5000.00, step=100.0)
-impostos = st.sidebar.number_input("Impostos / Retenções a Recolher (R$)", value=10000.00, step=500.0)
-outras_provisoes = st.sidebar.number_input("Outras Reservas (VT / Dissídios) (R$)", value=0.00, step=500.0)
+# Funções auxiliares para tratamento de texto e conversão de valores R$
+def converter_para_float(texto_valor):
+    try:
+        limpo = texto_valor.replace(".", "").replace(",", ".")
+        return float(limpo)
+    except:
+        return 0.0
 
-# CÁLCULOS AUTOMÁTICOS
-total_bloqueado = prov_rescisao + rendimentos + impostos + outras_provisoes
-saldo_livre = saldo_banco - total_bloqueado
-meses_cobertura = saldo_livre / repasse_mensal if repasse_mensal > 0 else 0
+# ------------------------------------------------------------------------------
+# INTERFACE PRINCIPAL EM ABAS
+# ------------------------------------------------------------------------------
+st.title("🏥 CIOP - Sistema de Gestão Financeira de Contratos")
 
-# TELA PRINCIPAL: CARDS DE RESPOSTA RÁPIDA
-col1, col2, col3 = st.columns(3)
+tab1, tab2, tab3 = st.tabs([
+    "📊 Painel do Contrato", 
+    "📄 Importar Contrato (PDF)", 
+    "🏦 Importar Extrato Bancário (PDF)"
+])
 
-with col1:
-    st.markdown(f"""
-    <div class="card-total">
-        <div class="card-title">Saldo Total no Banco</div>
-        <div class="card-value">R$ {saldo_banco:,.2f}</div>
-    </div>
-    """, unsafe_allow_html=True)
+# ==============================================================================
+# ABA 1: PAINEL DO CONTRATO (DASHBOARD)
+# ==============================================================================
+with tab1:
+    st.subheader(f"📌 {st.session_state['contrato_nome']}")
+    st.caption(f"Município: {st.session_state['municipio']} | Repasse Mensal Previsto: R$ {st.session_state['repasse_mensal']:,.2f}")
+    
+    # Barra Lateral para Ajuste Manual Se Necessário
+    st.sidebar.header("⚙️ Ajuste Manual de Saldos")
+    st.session_state["saldo_banco"] = st.sidebar.number_input("Saldo Bruto no Banco (R$)", value=st.session_state["saldo_banco"], step=500.0)
+    st.session_state["prov_rescisao"] = st.sidebar.number_input("Provisões Trabalhistas/Rescisões (R$)", value=st.session_state["prov_rescisao"], step=500.0)
+    st.session_state["rendimentos"] = st.sidebar.number_input("Rendimentos de Aplicação (R$)", value=st.session_state["rendimentos"], step=100.0)
+    st.session_state["impostos"] = st.sidebar.number_input("Impostos/Retenções (R$)", value=st.session_state["impostos"], step=100.0)
+    st.session_state["outras_provisoes"] = st.sidebar.number_input("Outras Reservas (R$)", value=st.session_state["outras_provisoes"], step=100.0)
+    
+    # CÁLCULOS
+    total_bloqueado = st.session_state["prov_rescisao"] + st.session_state["rendimentos"] + st.session_state["impostos"] + st.session_state["outras_provisoes"]
+    saldo_livre = st.session_state["saldo_banco"] - total_bloqueado
+    meses_cobertura = saldo_livre / st.session_state["repasse_mensal"] if st.session_state["repasse_mensal"] > 0 else 0.0
 
-with col2:
-    st.markdown(f"""
-    <div class="card-bloqueado">
-        <div class="card-title">Reservas Bloqueadas</div>
-        <div class="card-value">R$ {total_bloqueado:,.2f}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col3:
-    st.markdown(f"""
-    <div class="card-livre">
-        <div class="card-title">Saldo Real Livre</div>
-        <div class="card-value">R$ {saldo_livre:,.2f}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-# RESUMO PARA A DIRETORIA
-st.info(f"""
-💡 **Resumo para a Diretoria ({contrato_nome}):**
-* **Saldo em Conta:** R$ {saldo_banco:,.2f}
-* **Valor Bloqueado:** R$ {total_bloqueado:,.2f} *(comprometido com rescisões, impostos e rendimentos)*
-* **Saldo Efetivamente Livre:** **R$ {saldo_livre:,.2f}** *(garante {meses_cobertura:.2f} meses de custeio operacional)*
-""")
-
-# GRÁFICO DE DECOMPOSIÇÃO
-st.subheader("🧩 Composição do Saldo Indisponível")
-df_grafico = pd.DataFrame({
-    "Categoria": ["Saldo Livre", "Provisão Rescisória", "Impostos", "Rendimentos", "Outras Reservas"],
-    "Valor": [max(0, saldo_livre), prov_rescisao, impostos, rendimentos, outras_provisoes]
-})
-
-fig = px.pie(df_grafico, values="Valor", names="Categoria", hole=0.4, color_discrete_sequence=px.colors.qualitative.Set2)
-st.plotly_chart(fig, use_container_width=True)
+    # CARDS DE RESPOSTA RÁPIDA
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown(f"""
