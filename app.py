@@ -66,10 +66,12 @@ with tab1:
     total_bloqueado = st.session_state["prov_rescisao"] + st.session_state["rendimentos"] + st.session_state["impostos"] + st.session_state["outras_provisoes"]
     saldo_livre = st.session_state["saldo_banco"] - total_bloqueado
     meses_cobertura = saldo_livre / st.session_state["repasse_mensal"] if st.session_state["repasse_mensal"] > 0 else 0.0
-
+    
     col1, col2, col3 = st.columns(3)
+
     with col1:
-        st.markdown(f'
+        st.markdown(
+            f"""
 
 Saldo Total no Banco
 
